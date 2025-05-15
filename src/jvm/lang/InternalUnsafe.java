@@ -10,7 +10,6 @@ import java.security.ProtectionDomain;
 import jvm.klass.ObjectManipulator;
 import sun.misc.Unsafe;
 
-@SuppressWarnings("deprecation")
 public class InternalUnsafe {
 	static Class<?> internalUnsafeClazz;
 	static Unsafe unsafe;
@@ -24,7 +23,7 @@ public class InternalUnsafe {
 	/*
 	 * 64位JVM的offset从12开始为数据段，此处为java.lang.reflect.AccessibleObject的boolean override成员，将该成员覆写为true可以无视权限调用Method、Field、Constructor
 	 */
-	private static long java_lang_reflect_AccessibleObject_override_OFFSET = 12;
+	private static final long java_lang_reflect_AccessibleObject_override_offset;
 
 	static {
 		Field theUnsafe;
@@ -37,15 +36,38 @@ public class InternalUnsafe {
 			theInternalUnsafe = Unsafe.class.getDeclaredField("theInternalUnsafe");
 			theInternalUnsafe.setAccessible(true);
 			internalUnsafe = theInternalUnsafe.get(null);
-			// 最优先获取java.lang.reflect.AccessibleObject的override以获取访问权限
-			java_lang_reflect_AccessibleObject_override_OFFSET = unsafe.objectFieldOffset(BlankMirror_java_lang_reflect_AccessibleObject.class.getDeclaredField("override"));
+		} catch (NoSuchFieldException | ClassNotFoundException | SecurityException | IllegalArgumentException | IllegalAccessException ex) {
+			ex.printStackTrace();
+		}
+		// 最优先获取java.lang.reflect.AccessibleObject的override以获取访问权限
+		java_lang_reflect_AccessibleObject_override_offset = java_lang_reflect_AccessibleObject_override_offset();
+		try {
 			objectFieldOffset = setAccessible(internalUnsafeClazz.getDeclaredMethod("objectFieldOffset", Field.class), true);
 			staticFieldBase = setAccessible(internalUnsafeClazz.getDeclaredMethod("staticFieldBase", Field.class), true);
 			staticFieldOffset = setAccessible(internalUnsafeClazz.getDeclaredMethod("staticFieldOffset", Field.class), true);
 			defineClass = setAccessible(internalUnsafeClazz.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class), true);
-		} catch (NoSuchFieldException | NoSuchMethodException | ClassNotFoundException | SecurityException | IllegalArgumentException | IllegalAccessException ex) {
-			ex.printStackTrace();
+		} catch (NoSuchMethodException | SecurityException e) {
+			e.printStackTrace();
 		}
+
+	}
+
+	/**
+	 * 获取{@code java.lang.reflect.AccessibleObject.override}成员内存位移<br>
+	 * {@code sun.misc.Unsafe.objectFieldOffset()}已经标注{@code @Deprecated}，如果该方法还存在则调用该方法获取{@code override}位移。<br>
+	 * 若不存在则直接返回根据内存模型决定的位移（magic number）<br>
+	 * 
+	 * @returnS
+	 */
+	private static final int java_lang_reflect_AccessibleObject_override_offset() {
+		Method unsafe_objectFieldOffset = null;
+		try {
+			unsafe_objectFieldOffset = Unsafe.class.getDeclaredMethod("objectFieldOffset", Field.class);
+			if (unsafe_objectFieldOffset != null)
+				return (int) unsafe_objectFieldOffset.invoke(unsafe, BlankMirror_java_lang_reflect_AccessibleObject.class.getDeclaredField("override"));
+		} catch (NoSuchMethodException | SecurityException | IllegalAccessException | InvocationTargetException | NoSuchFieldException e) {
+		}
+		return 12;
 	}
 
 	public static final class Invoker {
@@ -76,7 +98,7 @@ public class InternalUnsafe {
 	 * @return
 	 */
 	public static <AO extends AccessibleObject> AO setAccessible(AO accessibleObj, boolean accessible) {
-		unsafe.putBoolean(accessibleObj, java_lang_reflect_AccessibleObject_override_OFFSET, accessible);
+		unsafe.putBoolean(accessibleObj, java_lang_reflect_AccessibleObject_override_offset, accessible);
 		return accessibleObj;
 	}
 
