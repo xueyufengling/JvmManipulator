@@ -8,7 +8,7 @@ import com.sun.tools.attach.AttachNotSupportedException;
 import com.sun.tools.attach.VirtualMachine;
 
 import jvm.klass.ObjectManipulator;
-import jvm.vm.VmEntryObject;
+import jvm.vm.VmManipulator;
 
 /**
  * Java Agent相关功能
@@ -16,7 +16,7 @@ import jvm.vm.VmEntryObject;
 public class Agent {
 	public static final Class<?> HotSpotVirtualMachineClass;// sun.tools.attach.HotSpotVirtualMachine
 	static {
-		VmEntryObject.setSystemProperty("jdk.attach.allowAttachSelf", "true");// 并非实际允许调用，只是记录在系统中
+		VmManipulator.setSystemProperty("jdk.attach.allowAttachSelf", "true");// 并非实际允许调用，只是记录在系统中
 		Class<?> cls = null;
 		try {
 			cls = Class.forName("sun.tools.attach.HotSpotVirtualMachine");
@@ -55,7 +55,7 @@ public class Agent {
 	 * @param args       传递给Agent的参数
 	 */
 	public static void attach(String agent_path, String args) {
-		attach(VmEntryObject.getProcessId(), agent_path, args);
+		attach(VmManipulator.getProcessId(), agent_path, args);
 	}
 
 	public static void attach(String agent_path) {

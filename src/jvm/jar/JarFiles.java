@@ -7,13 +7,16 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 
-import jvm.klass.Reflect;
+import jvm.klass.KlassLoader;
+import jvm.klass.UriPath;
 import jvm.lang.JavaLang;
+import jvm.lang.Reflect;
 
 /**
  * jar文件的相关操作，任何操作都需要传入{@code any_class_in_jar}，即jar内的任意一个类。<br>
@@ -22,15 +25,14 @@ import jvm.lang.JavaLang;
  */
 public class JarFiles {
 
-	public static final String ClassExtensionName = ".class";
-
 	/**
 	 * 获取已经加载的包列表
 	 * 
 	 * @return
 	 */
 	public static String[] getLoadedPackageNames() {
-		Package[] packages = JavaLang.getOuterCallerClass().getClassLoader().getDefinedPackages();// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		Package[] packages = caller.getClassLoader().getDefinedPackages();// 获取调用该方法的类
 		if (packages == null)
 			return null;
 		String[] package_names = new String[packages.length];
@@ -118,7 +120,7 @@ public class JarFiles {
 		try (JarInputStream jar_stream = new JarInputStream(jar)) {
 			JarEntry entry = null;
 			while ((entry = jar_stream.getNextJarEntry()) != null) {
-				op.exec(entry, getJarEntryBytes(jar_stream, DEFAULT_BUFFER_SIZE));
+				op.operate(entry, getJarEntryBytes(jar_stream, DEFAULT_BUFFER_SIZE));
 			}
 		} catch (IOException ex) {
 			ex.printStackTrace();
@@ -134,11 +136,11 @@ public class JarFiles {
 	public static void foreachFiles(InputStream jar, JarEntryOperation.File op) {
 		foreachEntries(jar, new JarEntryOperation() {
 			@Override
-			public boolean exec(JarEntry entry, ByteArrayOutputStream bytes) {
+			public boolean operate(JarEntry entry, ByteArrayOutputStream bytes) {
 				if (!entry.isDirectory()) {
 					String path = entry.getName();
 					int sep = path.lastIndexOf('/');
-					op.exec(sep == -1 ? null : path.substring(0, sep), path.substring(sep + 1), entry, bytes);
+					op.operate(sep == -1 ? null : path.substring(0, sep), path.substring(sep + 1), entry, bytes);
 				}
 				return true;
 			}
@@ -156,13 +158,13 @@ public class JarFiles {
 	public static void foreachFiles(InputStream jar, String start_path, boolean include_subpackage, JarEntryOperation.File op) {
 		foreachFiles(jar, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
 				if (isRootDir(start_path)) {
 					if (isRootDir(file_dir))
-						op.exec(file_dir, file_name, entry, bytes);
+						op.operate(file_dir, file_name, entry, bytes);
 				} else {
 					if (file_dir.startsWith(start_path))
-						op.exec(file_dir, file_name, entry, bytes);
+						op.operate(file_dir, file_name, entry, bytes);
 				}
 				return true;
 			}
@@ -172,9 +174,9 @@ public class JarFiles {
 	public static void filterFilesRegex(InputStream jar, String start_path, boolean include_subpackage, String regex, JarEntryOperation.File op) {
 		foreachFiles(jar, start_path, include_subpackage, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
 				if (file_name.matches(regex))
-					op.exec(file_dir, file_name, entry, bytes);
+					op.operate(file_dir, file_name, entry, bytes);
 				return true;
 			}
 		});
@@ -193,8 +195,8 @@ public class JarFiles {
 		List<JarEntryData> entries = new ArrayList<>();
 		foreachFiles(jar, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
-				boolean reserved = condition.exec(file_dir, file_name, entry, bytes);
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+				boolean reserved = condition.operate(file_dir, file_name, entry, bytes);
 				if (reserved)
 					entries.add(JarEntryData.from(file_dir, file_name, entry, bytes.toByteArray()));
 				return reserved;
@@ -207,8 +209,8 @@ public class JarFiles {
 		List<JarEntryData> entries = new ArrayList<>();
 		foreachFiles(jar, start_path, include_subpackage, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
-				boolean reserved = condition.exec(file_dir, file_name, entry, bytes);
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+				boolean reserved = condition.operate(file_dir, file_name, entry, bytes);
 				if (reserved)
 					entries.add(JarEntryData.from(file_dir, file_name, entry, bytes.toByteArray()));
 				return reserved;
@@ -253,9 +255,9 @@ public class JarFiles {
 	public static void filterFiles(InputStream jar, JarEntryOperation.File condition, JarEntryOperation.File op) {
 		foreachFiles(jar, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
-				if (condition.exec(file_dir, file_name, entry, bytes))
-					op.exec(file_dir, file_name, entry, bytes);
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+				if (condition.operate(file_dir, file_name, entry, bytes))
+					op.operate(file_dir, file_name, entry, bytes);
 				return true;
 			}
 		});
@@ -264,9 +266,9 @@ public class JarFiles {
 	public static void filterFiles(InputStream jar, String start_path, boolean include_subpackage, JarEntryOperation.File condition, JarEntryOperation.File op) {
 		foreachFiles(jar, start_path, include_subpackage, new JarEntryOperation.File() {
 			@Override
-			public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
-				if (condition.exec(file_dir, file_name, entry, bytes))
-					op.exec(file_dir, file_name, entry, bytes);
+			public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) {
+				if (condition.operate(file_dir, file_name, entry, bytes))
+					op.operate(file_dir, file_name, entry, bytes);
 				return true;
 			}
 		});
@@ -297,29 +299,54 @@ public class JarFiles {
 	}
 
 	public static void filterClass(InputStream jar, JarEntryOperation.Class op) {
-		filterFilesByType(jar, ClassExtensionName, (String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+		filterFilesByType(jar, KlassLoader.ClassExtensionName, (String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
 			String full_path = entry.getName();
-			op.exec(full_path.substring(0, full_path.length() - ClassExtensionName.length()).replace('/', '.'), entry, bytes);
+			op.operate(full_path.substring(0, full_path.length() - KlassLoader.ClassExtensionName.length()).replace('/', '.'), entry, bytes);
 			return true;
 		});
 	}
 
 	public static void filterClass(InputStream jar, String start_path, boolean include_subpackage, JarEntryOperation.Class op) {
-		filterFilesByType(jar, start_path, include_subpackage, ClassExtensionName, (String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+		filterFilesByType(jar, start_path, include_subpackage, KlassLoader.ClassExtensionName, (String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
 			String full_path = entry.getName();
-			op.exec(full_path.substring(0, full_path.length() - ClassExtensionName.length()).replace('/', '.'), entry, bytes);
+			op.operate(full_path.substring(0, full_path.length() - KlassLoader.ClassExtensionName.length()).replace('/', '.'), entry, bytes);
 			return true;
 		});
 	}
 
-	// -------------------------------------------------------- Resources ----------------------------------------------------------------------
-
-	public static byte[] getJarResourceAsBytes(Class<?> any_class_in_jar, String path) {
-		return getJarResourceAsBytes(getJarFilePath(any_class_in_jar), path);
+	public static HashMap<String, byte[]> collectClass(InputStream jar) {
+		HashMap<String, byte[]> classDefs = new HashMap<>();
+		filterClass(jar, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+			classDefs.put(class_full_name, bytes.toByteArray());
+			return true;
+		});
+		return classDefs;
 	}
 
-	public static byte[] getJarResourceAsBytes(String path) {
-		return getJarResourceAsBytes(getJarFilePath(JavaLang.getOuterCallerClass()), path);// 获取调用该方法的类
+	public static HashMap<String, byte[]> collectClass(InputStream jar, String start_path, boolean include_subpackage) {
+		HashMap<String, byte[]> classDefs = new HashMap<>();
+		filterClass(jar, start_path, include_subpackage, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+			classDefs.put(class_full_name, bytes.toByteArray());
+			return true;
+		});
+		return classDefs;
+	}
+
+	// -------------------------------------------------------- Resources ----------------------------------------------------------------------
+
+	public static byte[] getResourceAsBytes(Class<?> any_class_in_jar, String path) {
+		byte[] bytes = null;
+		try (InputStream res = any_class_in_jar.getResource(path).openStream()) {
+			bytes = res.readAllBytes();
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+		return bytes;
+	}
+
+	public static byte[] getResourceAsBytes(String path) {
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getResourceAsBytes(caller, path);// 获取调用该方法的类
 	}
 
 	/**
@@ -329,7 +356,7 @@ public class JarFiles {
 	 * @param path
 	 * @return
 	 */
-	public static byte[] getJarResourceAsBytes(JarFile jar, String path) {
+	public static byte[] getResourceAsBytes(JarFile jar, String path) {
 		byte[] bytes = null;
 		try (jar) {
 			JarEntry entry = jar.getJarEntry(path);
@@ -352,16 +379,16 @@ public class JarFiles {
 	 * @param path
 	 * @return
 	 */
-	public static byte[] getJarResourceAsBytes(String jar_path, String path) {
+	public static byte[] getResourceAsBytes(String jar_path, String path) {
 		try {
-			return getJarResourceAsBytes(new JarFile(jar_path), path);
+			return getResourceAsBytes(new JarFile(jar_path), path);
 		} catch (IOException ex) {
 			ex.printStackTrace();
 		}
 		return null;
 	}
 
-	public static byte[] getJarResourceAsBytes(InputStream jar_bytes, String path) {
+	public static byte[] getResourceAsBytes(InputStream jar_bytes, String path) {
 		byte[] bytes = null;
 		try {
 			bytes = readJarEntry(jar_bytes, path).data;
@@ -371,37 +398,40 @@ public class JarFiles {
 		return bytes;
 	}
 
-	public static byte[] getJarResourceAsBytes(byte[] jar_bytes, String path) {
-		return getJarResourceAsBytes(new ByteArrayInputStream(jar_bytes), path);
+	public static byte[] getResourceAsBytes(byte[] jar_bytes, String path) {
+		return getResourceAsBytes(new ByteArrayInputStream(jar_bytes), path);
 	}
 
 	// --------------------------------------------------------- File System --------------------------------------------------------------------
 
-	/**
-	 * 传入jar中的一个类，获取对应的jar绝对路径，包括BootstrapClassLoader加载的jar
-	 * 
-	 * @param any_class_in_jar jar内的任意一个类
-	 * @return jar的绝对路径
-	 */
-	public static String getJarFilePath(Class<?> any_class_in_jar) {
-		String path = null;
-		if (any_class_in_jar.getClassLoader() == null)// 如果是BootstrapClassLoader加载的则直接获取对应的系统加载jar路径
-			path = ClassLoader.getSystemResource("").getPath();
-		else
-			path = any_class_in_jar.getResource("").getPath();
-		return path.substring(5, path.lastIndexOf('!'));
+	public static String getJarFilePath(Class<?> any_class_in_jar, UriPath.Resolver resolver) {
+		return KlassLoader.localKlassLocation(any_class_in_jar, resolver);
+	}
+
+	public static String getJarFilePath(UriPath.Resolver resolver) {
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getJarFilePath(caller, resolver);// 获取调用该方法的类
 	}
 
 	public static String getJarFilePath() {
-		return getJarFilePath(JavaLang.getOuterCallerClass());// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getJarFilePath(caller, UriPath.Resolver.DEFAULT);// 获取调用该方法的类
 	}
 
 	public static boolean isRootDir(String dir) {
 		return dir == null || dir.equals("") || dir.equals("/");
 	}
 
+	public static InputStream getJarInputStream(Class<?> any_class_in_jar, UriPath.Resolver resolver) throws FileNotFoundException {
+		return new FileInputStream(getJarFilePath(any_class_in_jar, resolver));
+	}
+
 	public static InputStream getJarInputStream(Class<?> any_class_in_jar) throws FileNotFoundException {
-		return new FileInputStream(getJarFilePath(any_class_in_jar));
+		return getJarInputStream(any_class_in_jar, UriPath.Resolver.DEFAULT);
+	}
+
+	public static InputStream getJarInputStream(byte[] bytes) {
+		return new ByteArrayInputStream(bytes);
 	}
 
 	// ----------------------------------------------------------- Class ---------------------------------------------------------------------------
@@ -427,7 +457,8 @@ public class JarFiles {
 	}
 
 	public static List<String> getClassNamesInJarPackage(String package_name, boolean include_subpackage) {
-		return getClassNamesInJarPackage(JavaLang.getOuterCallerClass(), package_name, include_subpackage);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getClassNamesInJarPackage(caller, package_name, include_subpackage);// 获取调用该方法的类
 	}
 
 	public static List<String> getClassNamesInJarPackage(Class<?> any_class_in_package, String package_name) {
@@ -435,7 +466,8 @@ public class JarFiles {
 	}
 
 	public static List<String> getClassNamesInJarPackage(String package_name) {
-		return getClassNamesInJarPackage(JavaLang.getOuterCallerClass(), package_name);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getClassNamesInJarPackage(caller, package_name);// 获取调用该方法的类
 	}
 
 	/**
@@ -461,7 +493,8 @@ public class JarFiles {
 	}
 
 	public static List<Class<?>> getClassInJarPackage(String package_name, boolean include_subpackage) {
-		return getClassInJarPackage(JavaLang.getOuterCallerClass(), package_name, include_subpackage);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getClassInJarPackage(caller, package_name, include_subpackage);// 获取调用该方法的类
 	}
 
 	public static List<Class<?>> getClassInJarPackage(Class<?> any_class_in_package, String package_name) {
@@ -469,7 +502,8 @@ public class JarFiles {
 	}
 
 	public static List<Class<?>> getClassInJarPackage(String package_name) {
-		return getClassInJarPackage(JavaLang.getOuterCallerClass(), package_name);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getClassInJarPackage(caller, package_name);// 获取调用该方法的类
 	}
 
 	/**
@@ -490,7 +524,8 @@ public class JarFiles {
 	}
 
 	public static List<Class<?>> getSubClassInJarPackage(String package_name, Class<?> super_class, boolean include_subpackage) {
-		return getSubClassInJarPackage(JavaLang.getOuterCallerClass(), package_name, super_class, include_subpackage);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();
+		return getSubClassInJarPackage(caller, package_name, super_class, include_subpackage);// 获取调用该方法的类
 	}
 
 	public static List<Class<?>> getSubClassInJarPackage(Class<?> any_class_in_package, String package_name, Class<?> super_class) {

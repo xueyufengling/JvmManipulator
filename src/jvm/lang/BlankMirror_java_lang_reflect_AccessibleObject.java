@@ -1,4 +1,4 @@
-package jvm.klass;
+package jvm.lang;
 
 /**
  * 用于获取AccessibleObject的override成员的内存offset的镜像类

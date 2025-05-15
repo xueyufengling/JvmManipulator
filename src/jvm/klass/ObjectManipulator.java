@@ -5,27 +5,16 @@ import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 
-import sun.misc.Unsafe;
+import jvm.lang.Handles;
+import jvm.lang.InternalUnsafe;
+import jvm.lang.Reflect;
 
 /**
  * 核心的类成员修改、访问和方法调用类，支持修改final、record成员变量。<br>
  * 该类的方法破坏了Java的安全性，请谨慎使用。
  */
-@SuppressWarnings("deprecation")
 public abstract class ObjectManipulator {
-	private static Class<?> internalUnsafeClazz;
-	private static Unsafe unsafe;
-	private static Object internalUnsafe;
-
-	private static Method objectFieldOffset;// 没有检查的Unsafe.objectFieldOffset
-	private static Method staticFieldBase;
-	private static Method staticFieldOffset;
-	/*
-	 * 64位JVM的offset从12开始为数据段，此处为java.lang.reflect.AccessibleObject的boolean override成员，将该成员覆写为true可以无视权限调用Method、Field、Constructor
-	 */
-	private static long java_lang_reflect_AccessibleObject_override_OFFSET = 12;
 
 	private static MethodHandle getDeclaredFields0;// Class.getDeclaredFields0无视反射访问权限获取字段
 	private static MethodHandle getDeclaredMethods0;
@@ -33,26 +22,12 @@ public abstract class ObjectManipulator {
 	private static MethodHandle searchMethods;
 
 	static {
-		Field theUnsafe;
-		Field theInternalUnsafe;
 		try {
-			theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-			theUnsafe.setAccessible(true);
-			unsafe = (Unsafe) theUnsafe.get(null);
-			internalUnsafeClazz = Class.forName("jdk.internal.misc.Unsafe");
-			theInternalUnsafe = Unsafe.class.getDeclaredField("theInternalUnsafe");
-			theInternalUnsafe.setAccessible(true);
-			internalUnsafe = theInternalUnsafe.get(null);
-			// 最优先获取java.lang.reflect.AccessibleObject的override以获取访问权限
-			java_lang_reflect_AccessibleObject_override_OFFSET = unsafe.objectFieldOffset(BlankMirror_java_lang_reflect_AccessibleObject.class.getDeclaredField("override"));
 			getDeclaredFields0 = Handles.findSpecialMethodHandle(Class.class, Class.class, "getDeclaredFields0", Field[].class, boolean.class);
 			getDeclaredMethods0 = Handles.findSpecialMethodHandle(Class.class, Class.class, "getDeclaredMethods0", Method[].class, boolean.class);
 			searchFields = Handles.findStaticMethodHandle(Class.class, "searchFields", Field.class, Field[].class, String.class);
 			searchMethods = Handles.findStaticMethodHandle(Class.class, "searchMethods", Method.class, Method[].class, String.class, Class[].class);
-			objectFieldOffset = removeAccessCheck(internalUnsafeClazz.getDeclaredMethod("objectFieldOffset", Field.class));
-			staticFieldBase = removeAccessCheck(internalUnsafeClazz.getDeclaredMethod("staticFieldBase", Field.class));
-			staticFieldOffset = removeAccessCheck(internalUnsafeClazz.getDeclaredMethod("staticFieldOffset", Field.class));
-		} catch (NoSuchFieldException | NoSuchMethodException | ClassNotFoundException | SecurityException | IllegalArgumentException | IllegalAccessException ex) {
+		} catch (SecurityException | IllegalArgumentException ex) {
 			ex.printStackTrace();
 		}
 	}
@@ -119,8 +94,7 @@ public abstract class ObjectManipulator {
 	 * @return
 	 */
 	public static <AO extends AccessibleObject> AO removeAccessCheck(AO access_obj) {
-		unsafe.putBoolean(access_obj, java_lang_reflect_AccessibleObject_override_OFFSET, true);
-		return access_obj;
+		return InternalUnsafe.setAccessible(access_obj, true);
 	}
 
 	/**
@@ -131,8 +105,7 @@ public abstract class ObjectManipulator {
 	 * @return
 	 */
 	public static <AO extends AccessibleObject> AO recoveryAccessCheck(AO access_obj) {
-		unsafe.putBoolean(access_obj, java_lang_reflect_AccessibleObject_override_OFFSET, false);
-		return access_obj;
+		return InternalUnsafe.setAccessible(access_obj, false);
 	}
 
 	/**
@@ -199,74 +172,6 @@ public abstract class ObjectManipulator {
 	}
 
 	/**
-	 * 调用internalUnsafe的方法
-	 * 
-	 * @param method_name 方法名称
-	 * @param arg_types   参数类型
-	 * @param args        实参
-	 * @return
-	 */
-	public static Object invokeInternalUnsafeMethod(String method_name, Class<?>[] arg_types, Object... args) {
-		try {
-			return invoke(internalUnsafe, method_name, arg_types, args);
-		} catch (SecurityException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	/**
-	 * 没有任何安全检查的Unsafe.objectFieldOffset方法，可以修改record class的成员
-	 * 
-	 * @param field
-	 * @return
-	 */
-	public static long objectFieldOffset(Field field) {
-		long offset = -1;
-		try {
-			offset = (long) objectFieldOffset.invoke(internalUnsafe, field);
-		} catch (IllegalAccessException | InvocationTargetException e) {
-			e.printStackTrace();
-		}
-		return offset;
-	}
-
-	public static Object staticFieldBase(Field field) {
-		try {
-			return staticFieldBase.invoke(internalUnsafe, field);
-		} catch (IllegalAccessException | InvocationTargetException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	public static long staticFieldOffset(Field field) {
-		long offset = -1;
-		try {
-			offset = (long) staticFieldOffset.invoke(internalUnsafe, field);
-		} catch (IllegalAccessException | InvocationTargetException e) {
-			e.printStackTrace();
-		}
-		return offset;
-	}
-
-	/**
-	 * 不调用构造函数创建一个对象
-	 * 
-	 * @param cls 对象类
-	 * @return 分配的对象
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> T allocateInstance(Class<T> cls) {
-		try {
-			return (T) unsafe.allocateInstance(cls);
-		} catch (InstantiationException ex) {
-			ex.printStackTrace();
-		}
-		return null;
-	}
-
-	/**
 	 * 无视访问权限和修饰符修改Object值，如果是静态成员忽略obj参数.此方法对于HiddenClass和record同样有效
 	 * 
 	 * @param obj   要修改值的对象
@@ -277,10 +182,7 @@ public abstract class ObjectManipulator {
 	public static boolean setObject(Object obj, Field field, Object value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putObject(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putObject(obj, objectFieldOffset(field), value);
+		InternalUnsafe.putObject(obj, field, value);
 		return true;
 	}
 
@@ -291,10 +193,7 @@ public abstract class ObjectManipulator {
 	public static Object getObject(Object obj, Field field) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			return unsafe.getObject(staticFieldBase(field), staticFieldOffset(field));
-		else
-			return unsafe.getObject(obj, objectFieldOffset(field));
+		return InternalUnsafe.getObject(obj, field);
 	}
 
 	public static Object getObject(Object obj, String field) {
@@ -304,10 +203,7 @@ public abstract class ObjectManipulator {
 	public static boolean setLong(Object obj, Field field, long value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putLong(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putLong(obj, objectFieldOffset(field), value);
+		InternalUnsafe.putLong(obj, field, value);
 		return true;
 	}
 
@@ -318,10 +214,7 @@ public abstract class ObjectManipulator {
 	public static boolean setBoolean(Object obj, Field field, boolean value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putBoolean(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putBoolean(obj, objectFieldOffset(field), value);
+		InternalUnsafe.puttBoolean(obj, field, value);
 		return true;
 	}
 
@@ -332,10 +225,7 @@ public abstract class ObjectManipulator {
 	public static boolean setInt(Object obj, Field field, int value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putInt(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putInt(obj, objectFieldOffset(field), value);
+		InternalUnsafe.putInt(obj, field, value);
 		return true;
 	}
 
@@ -346,10 +236,7 @@ public abstract class ObjectManipulator {
 	public static boolean setDouble(Object obj, Field field, double value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putDouble(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putDouble(obj, objectFieldOffset(field), value);
+		InternalUnsafe.putDouble(obj, field, value);
 		return true;
 	}
 
@@ -360,10 +247,7 @@ public abstract class ObjectManipulator {
 	public static boolean setFloat(Object obj, Field field, float value) {
 		if (field == null)
 			return false;
-		if (Modifier.isStatic(field.getModifiers()))
-			unsafe.putFloat(staticFieldBase(field), staticFieldOffset(field), value);
-		else
-			unsafe.putFloat(obj, objectFieldOffset(field), value);
+		InternalUnsafe.putFloat(obj, field, value);
 		return true;
 	}
 

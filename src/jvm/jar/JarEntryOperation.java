@@ -12,7 +12,7 @@ public interface JarEntryOperation {
 	 * @param bytes
 	 * @return 在collect时是否收集该Entry
 	 */
-	public boolean exec(JarEntry entry, ByteArrayOutputStream bytes);
+	public boolean operate(JarEntry entry, ByteArrayOutputStream bytes);
 
 	@FunctionalInterface
 	public static interface File {
@@ -24,7 +24,7 @@ public interface JarEntryOperation {
 		 * @param entry
 		 * @param bytes
 		 */
-		public boolean exec(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes);
+		public boolean operate(String file_dir, String file_name, JarEntry entry, ByteArrayOutputStream bytes);
 	}
 
 	@FunctionalInterface
@@ -36,6 +36,6 @@ public interface JarEntryOperation {
 		 * @param entry
 		 * @param bytes
 		 */
-		public boolean exec(String class_full_name, JarEntry entry, ByteArrayOutputStream bytes);
+		public boolean operate(String class_full_name, JarEntry entry, ByteArrayOutputStream bytes);
 	}
 }

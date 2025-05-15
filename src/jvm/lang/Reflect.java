@@ -1,4 +1,4 @@
-package jvm.klass;
+package jvm.lang;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
