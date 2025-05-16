@@ -16,6 +16,7 @@ import jvm.lang.Reflect;
 public class KlassLoader {
 	public static final String ClassExtensionName = ".class";
 	private static Method ClassLoader_m_defineClass;
+	private static Method ClassLoader_m_findClass;
 	private static Field ClassLoader_f_parent;
 	private static Field Class_f_classLoader;
 
@@ -24,6 +25,7 @@ public class KlassLoader {
 	static {
 		JavaLang.noReflectionFieldFilter(() -> {
 			ClassLoader_m_defineClass = Reflect.getMethod(ClassLoader.class, "defineClass", new Class<?>[] { String.class, byte[].class, int.class, int.class, ProtectionDomain.class });
+			ClassLoader_m_findClass = Reflect.getMethod(ClassLoader.class, "findClass", new Class<?>[] { String.class });
 			ClassLoader_f_parent = Reflect.getField(ClassLoader.class, "parent");
 			Class_f_classLoader = Reflect.getField(Class.class, "classLoader");
 		});
@@ -58,7 +60,7 @@ public class KlassLoader {
 			if (byte_code == null) {
 				if (reverseLoading) {
 					reverseLoading = false;
-					throw new ClassNotFoundException("Class " + name + " not found in ClassLoader chain.");
+					return null;
 				} else {
 					reverseLoading = true;
 					return son.loadClass(name);
@@ -69,7 +71,7 @@ public class KlassLoader {
 
 		public final Class<?> load(String className) {
 			try {
-				return this.loadClass(className);
+				return son.loadClass(className);
 			} catch (ClassNotFoundException e) {
 				e.printStackTrace();
 			}
@@ -254,6 +256,19 @@ public class KlassLoader {
 
 	public static final Class<?> defineClass(int stackSkip, String name, byte[] b) throws ClassFormatError {
 		return defineClass(stackSkip, name, b, 0, b.length);
+	}
+
+	/**
+	 * 查找类
+	 * 
+	 * @param stackSkip
+	 * @param name
+	 * @param b
+	 * @return
+	 * @throws ClassFormatError
+	 */
+	public static final Class<?> findClass(ClassLoader loader, String name) throws ClassNotFoundException {
+		return (Class<?>) ObjectManipulator.invoke(loader, ClassLoader_m_findClass, name);
 	}
 
 	public static ClassLoader getCallerClassLoader() {
