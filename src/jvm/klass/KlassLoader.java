@@ -33,8 +33,15 @@ public class KlassLoader {
 
 	public static class Proxy extends ClassLoader {
 		private ClassLoader son;
-		private HashMap<String, byte[]> klassDefs;
+		ByteCodeSource bytecodeSource;
 		private boolean reverseLoading = false;// 记录是否已经开始向下查找，防止在整个加载链中都查找不到无限循环loadClass()
+
+		public Proxy(ClassLoader dest, String dest_parent_field_name, ByteCodeSource source) {
+			super(KlassLoader.getClassLoaderParent(dest, dest_parent_field_name));
+			KlassLoader.setClassLoaderParent(dest, dest_parent_field_name, this);
+			this.son = dest;
+			this.bytecodeSource = source;
+		}
 
 		/**
 		 * Proxy将插入双亲委托加载链的dest的上方
@@ -43,10 +50,11 @@ public class KlassLoader {
 		 * @param undefinedKlass 要加载的字节码
 		 */
 		public Proxy(ClassLoader dest, String dest_parent_field_name, HashMap<String, byte[]> undefinedKlass) {
-			super(KlassLoader.getClassLoaderParent(dest, dest_parent_field_name));
-			KlassLoader.setClassLoaderParent(dest, dest_parent_field_name, this);
-			this.son = dest;
-			this.klassDefs = undefinedKlass;
+			this(dest, dest_parent_field_name, ByteCodeSource.Map.from(undefinedKlass));
+		}
+
+		public Proxy(ClassLoader dest, ByteCodeSource source) {
+			this(dest, default_parent_field_name, source);
 		}
 
 		public Proxy(ClassLoader dest, HashMap<String, byte[]> undefinedKlass) {
@@ -55,7 +63,7 @@ public class KlassLoader {
 
 		@Override
 		protected Class<?> findClass(String name) throws ClassNotFoundException {
-			byte[] byte_code = klassDefs.get(name);
+			byte[] byte_code = bytecodeSource.genByteCode(name);
 			// 代理及之上的类加载器找不到类定义时，则让子类加载器son去加载目标类，这样动态加载的类就可以引用son加载的类
 			if (byte_code == null) {
 				if (reverseLoading) {
@@ -89,6 +97,14 @@ public class KlassLoader {
 
 		public static final Proxy addFor(ClassLoader dest, String dest_parent_field_name, HashMap<String, byte[]> undefinedKlass) {
 			return new Proxy(dest, dest_parent_field_name, undefinedKlass);
+		}
+
+		public static final Proxy addFor(ClassLoader dest, ByteCodeSource source) {
+			return new Proxy(dest, source);
+		}
+
+		public static final Proxy addFor(ClassLoader dest, String dest_parent_field_name, ByteCodeSource source) {
+			return new Proxy(dest, dest_parent_field_name, source);
 		}
 	}
 
