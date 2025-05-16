@@ -1,6 +1,7 @@
 package jvm.klass;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -15,11 +16,79 @@ import jvm.lang.Reflect;
 public class KlassLoader {
 	public static final String ClassExtensionName = ".class";
 	private static Method ClassLoader_m_defineClass;
+	private static Field ClassLoader_f_parent;
+	private static Field Class_f_classLoader;
+
+	public static final String default_parent_field_name = "parent";
 
 	static {
-		ClassLoader_m_defineClass = Reflect.getMethod(ClassLoader.class, "defineClass", new Class<?>[] { String.class, byte[].class, int.class, int.class, ProtectionDomain.class });
+		JavaLang.noReflectionFieldFilter(() -> {
+			ClassLoader_m_defineClass = Reflect.getMethod(ClassLoader.class, "defineClass", new Class<?>[] { String.class, byte[].class, int.class, int.class, ProtectionDomain.class });
+			ClassLoader_f_parent = Reflect.getField(ClassLoader.class, "parent");
+			Class_f_classLoader = Reflect.getField(Class.class, "classLoader");
+		});
 	}
 
+	public static class Proxy extends ClassLoader {
+		private HashMap<String, byte[]> klassDefs;
+
+		/**
+		 * Proxy将插入双亲委托加载链的dest的上方
+		 * 
+		 * @param dest           目标ClassLoader
+		 * @param undefinedKlass 要加载的字节码
+		 */
+		public Proxy(ClassLoader dest, String dest_parent_field_name, HashMap<String, byte[]> undefinedKlass) {
+			super(KlassLoader.getClassLoaderParent(dest, dest_parent_field_name));
+			KlassLoader.setClassLoaderParent(dest, dest_parent_field_name, this);
+			this.klassDefs = undefinedKlass;
+		}
+
+		public Proxy(ClassLoader dest, HashMap<String, byte[]> undefinedKlass) {
+			this(dest, default_parent_field_name, undefinedKlass);
+		}
+
+		@Override
+		protected Class<?> findClass(String name) throws ClassNotFoundException {
+			byte[] byte_code = klassDefs.get(name);
+			if (byte_code == null)
+				throw new ClassNotFoundException(name);
+			return defineClass(name, byte_code, 0, byte_code.length);
+		}
+
+		public final Class<?> load(String className) {
+			try {
+				return this.loadClass(className);
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		/**
+		 * @param dest
+		 * @param undefinedKlass
+		 * @return
+		 */
+		public static final Proxy addFor(ClassLoader dest, HashMap<String, byte[]> undefinedKlass) {
+			return new Proxy(dest, undefinedKlass);
+		}
+
+		public static final Proxy addFor(ClassLoader dest, String dest_parent_field_name, HashMap<String, byte[]> undefinedKlass) {
+			return new Proxy(dest, dest_parent_field_name, undefinedKlass);
+		}
+	}
+
+	/**
+	 * 将undefinedKlass委托给父类为loader的新自定义ClassLoader加载。<br>
+	 * 注意，类加载的起点始终是手动调用的Class.forName(name,init,classLoader)、classLoader.loadClass(name)或直接使用该类型，例如直接在代码中使用{@code A a=new A();}的上下文的ClassLoader。<br>
+	 * 类搜寻只会从起点开始，一直向上查找直到BootstrapClassLoader，而不会去查找起点ClassLoader的子代ClassLoader。<br>
+	 * 因此，调用该方法返回的ClassLoader需要用户手动加载相关类，并且用反射使用加载的类，不能直接在代码中使用这些类型。<br>
+	 * 
+	 * @param loader
+	 * @param undefinedKlass
+	 * @return
+	 */
 	public static ClassLoader newClassLoaderFor(ClassLoader loader, HashMap<String, byte[]> undefinedKlass) {
 		return new ClassLoader(loader) {
 			private HashMap<String, byte[]> klassDefs = undefinedKlass;
@@ -37,6 +106,72 @@ public class KlassLoader {
 	public static ClassLoader newClassLoaderFor(HashMap<String, byte[]> undefinedKlass) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
 		return newClassLoaderFor(caller.getClassLoader(), undefinedKlass);
+	}
+
+	/**
+	 * 解析父类加载器的字段
+	 * 
+	 * @param target
+	 * @param dest_parent_field_name
+	 * @return
+	 */
+	private static final Field resolveParentLoaderField(ClassLoader target, String dest_parent_field_name) {
+		return dest_parent_field_name.equals(default_parent_field_name) ? ClassLoader_f_parent : JavaLang.fieldNoReflectionFilter(target.getClass(), dest_parent_field_name);
+	}
+
+	/**
+	 * 为ClassLoader设置父类加载器
+	 * 
+	 * @param target                 目标ClassLoader
+	 * @param dest_parent_field_name 目标ClassLoader使用的父类加载器的字段名，当没有使用ClassLoader.parent成员构建加载委托链时需要指定实际的字段名称
+	 * @param parent
+	 * @return
+	 */
+	public static ClassLoader setClassLoaderParent(ClassLoader target, String dest_parent_field_name, ClassLoader parent) {
+		ObjectManipulator.setObject(target, resolveParentLoaderField(target, dest_parent_field_name), parent);
+		return target;
+	}
+
+	public static ClassLoader setClassLoaderParent(ClassLoader target, ClassLoader parent) {
+		return setClassLoaderParent(target, default_parent_field_name, parent);
+	}
+
+	/**
+	 * 不经过安全检查直接获取parent
+	 * 
+	 * @param target
+	 * @param parent
+	 * @return
+	 */
+	public static ClassLoader getClassLoaderParent(ClassLoader target, String dest_parent_field_name) {
+		return (ClassLoader) ObjectManipulator.access(target, resolveParentLoaderField(target, dest_parent_field_name));
+	}
+
+	public static ClassLoader getClassLoaderParent(ClassLoader target) {
+		return getClassLoaderParent(target, default_parent_field_name);
+	}
+
+	/**
+	 * 设置Class的classLoader变量
+	 * 
+	 * @param cls
+	 * @param loader
+	 * @return
+	 */
+	public static Class<?> setClassLoader(Class<?> cls, ClassLoader loader) {
+		ObjectManipulator.setObject(cls, Class_f_classLoader, loader);
+		return cls;
+	}
+
+	/**
+	 * 不经过安全检查直接获取classLoader
+	 * 
+	 * @param target
+	 * @param parent
+	 * @return
+	 */
+	public static ClassLoader getClassLoader(Class<?> cls) {
+		return (ClassLoader) ObjectManipulator.access(cls, Class_f_classLoader);
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package jvm.lang;
 
 import java.lang.invoke.VarHandle;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
@@ -42,8 +43,34 @@ public class JavaLang {
 		}
 		stackWalker = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 	}
-	
-	
+
+	/**
+	 * 在没有反射字段过滤器的环境下操作
+	 * 
+	 * @param op
+	 */
+	public static final void noReflectionFieldFilter(Runnable op) {
+		Map<Class<?>, Set<String>> filterMap = getReflectionFieldFilter();
+		removeReflectionFieldFilter();
+		op.run();
+		setReflectionFieldFilter(filterMap);
+	}
+
+	/**
+	 * 不经过反射过滤获取字段
+	 * 
+	 * @param cls
+	 * @param field_name
+	 * @return
+	 */
+	public static final Field fieldNoReflectionFilter(Class<?> cls, String field_name) {
+		Field f = null;
+		Map<Class<?>, Set<String>> filterMap = getReflectionFieldFilter();
+		removeReflectionFieldFilter();
+		f = Reflect.getField(cls, field_name);
+		setReflectionFieldFilter(filterMap);
+		return f;
+	}
 
 	/**
 	 * 获取反射过滤的字段
@@ -200,7 +227,7 @@ public class JavaLang {
 	public static Class<?> getOuterCallerClass() {
 		return trackStackFrameClass(3);
 	}
-	
+
 	public static Class<?> getOuterCallerClassAsParam() {
 		return trackStackFrameClass(4);
 	}

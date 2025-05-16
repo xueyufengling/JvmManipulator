@@ -11,11 +11,12 @@ import jvm.klass.ObjectManipulator;
 import sun.misc.Unsafe;
 
 public class InternalUnsafe {
-	static Class<?> internalUnsafeClazz;
-	static Unsafe unsafe;
+	public static Unsafe unsafe;
+	static Class<?> internalUnsafeClass;
 	static Object internalUnsafe;
 
-	private static Method objectFieldOffset;// 没有检查的Unsafe.objectFieldOffset
+	private static Method objectFieldOffset$Field;// 没有检查的jdk.internal.misc.Unsafe.objectFieldOffset()
+	private static Method objectFieldOffset$Class$String;
 	private static Method staticFieldBase;
 	private static Method staticFieldOffset;
 	private static Method defineClass;
@@ -25,6 +26,8 @@ public class InternalUnsafe {
 	 */
 	private static final long java_lang_reflect_AccessibleObject_override_offset;
 
+	public static final long INVALID_FIELD_OFFSET = -1;
+
 	static {
 		Field theUnsafe;
 		Field theInternalUnsafe;
@@ -32,7 +35,7 @@ public class InternalUnsafe {
 			theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
 			theUnsafe.setAccessible(true);
 			unsafe = (Unsafe) theUnsafe.get(null);
-			internalUnsafeClazz = Class.forName("jdk.internal.misc.Unsafe");
+			internalUnsafeClass = Class.forName("jdk.internal.misc.Unsafe");
 			theInternalUnsafe = Unsafe.class.getDeclaredField("theInternalUnsafe");
 			theInternalUnsafe.setAccessible(true);
 			internalUnsafe = theInternalUnsafe.get(null);
@@ -42,10 +45,11 @@ public class InternalUnsafe {
 		// 最优先获取java.lang.reflect.AccessibleObject的override以获取访问权限
 		java_lang_reflect_AccessibleObject_override_offset = java_lang_reflect_AccessibleObject_override_offset();
 		try {
-			objectFieldOffset = setAccessible(internalUnsafeClazz.getDeclaredMethod("objectFieldOffset", Field.class), true);
-			staticFieldBase = setAccessible(internalUnsafeClazz.getDeclaredMethod("staticFieldBase", Field.class), true);
-			staticFieldOffset = setAccessible(internalUnsafeClazz.getDeclaredMethod("staticFieldOffset", Field.class), true);
-			defineClass = setAccessible(internalUnsafeClazz.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class), true);
+			objectFieldOffset$Field = setAccessible(internalUnsafeClass.getDeclaredMethod("objectFieldOffset", Field.class), true);
+			objectFieldOffset$Class$String = setAccessible(internalUnsafeClass.getDeclaredMethod("objectFieldOffset", Class.class, String.class), true);
+			staticFieldBase = setAccessible(internalUnsafeClass.getDeclaredMethod("staticFieldBase", Field.class), true);
+			staticFieldOffset = setAccessible(internalUnsafeClass.getDeclaredMethod("staticFieldOffset", Field.class), true);
+			defineClass = setAccessible(internalUnsafeClass.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class), true);
 		} catch (NoSuchMethodException | SecurityException e) {
 			e.printStackTrace();
 		}
@@ -57,14 +61,14 @@ public class InternalUnsafe {
 	 * {@code sun.misc.Unsafe.objectFieldOffset()}已经标注{@code @Deprecated}，如果该方法还存在则调用该方法获取{@code override}位移。<br>
 	 * 若不存在则直接返回根据内存模型决定的位移（magic number）<br>
 	 * 
-	 * @returnS
+	 * @return
 	 */
-	private static final int java_lang_reflect_AccessibleObject_override_offset() {
+	private static final long java_lang_reflect_AccessibleObject_override_offset() {
 		Method unsafe_objectFieldOffset = null;
 		try {
 			unsafe_objectFieldOffset = Unsafe.class.getDeclaredMethod("objectFieldOffset", Field.class);
 			if (unsafe_objectFieldOffset != null)
-				return (int) unsafe_objectFieldOffset.invoke(unsafe, BlankMirror_java_lang_reflect_AccessibleObject.class.getDeclaredField("override"));
+				return (long) unsafe_objectFieldOffset.invoke(unsafe, BlankMirror_java_lang_reflect_AccessibleObject.class.getDeclaredField("override"));
 		} catch (NoSuchMethodException | SecurityException | IllegalAccessException | InvocationTargetException | NoSuchFieldException e) {
 		}
 		return 12;
@@ -102,6 +106,12 @@ public class InternalUnsafe {
 		return accessibleObj;
 	}
 
+	public static Field setAccessible(Class<?> cls, String field_name, boolean accessible) {
+		Field f = Reflect.getField(cls, field_name);
+		setAccessible(f, accessible);
+		return f;
+	}
+
 	/**
 	 * 没有任何安全检查的Unsafe.objectFieldOffset方法，可以修改record class的成员
 	 * 
@@ -109,13 +119,21 @@ public class InternalUnsafe {
 	 * @return
 	 */
 	public static long objectFieldOffset(Field field) {
-		long offset = -1;
 		try {
-			offset = (long) objectFieldOffset.invoke(internalUnsafe, field);
+			return (long) objectFieldOffset$Field.invoke(internalUnsafe, field);
 		} catch (IllegalAccessException | InvocationTargetException e) {
 			e.printStackTrace();
 		}
-		return offset;
+		return INVALID_FIELD_OFFSET;
+	}
+
+	public static long objectFieldOffset(Class<?> cls, String field_name) {
+		try {
+			return (long) objectFieldOffset$Class$String.invoke(internalUnsafe, cls, field_name);
+		} catch (IllegalAccessException | InvocationTargetException e) {
+			e.printStackTrace();
+		}
+		return INVALID_FIELD_OFFSET;
 	}
 
 	public static Object staticFieldBase(Field field) {
@@ -128,13 +146,12 @@ public class InternalUnsafe {
 	}
 
 	public static long staticFieldOffset(Field field) {
-		long offset = -1;
 		try {
-			offset = (long) staticFieldOffset.invoke(internalUnsafe, field);
+			return (long) staticFieldOffset.invoke(internalUnsafe, field);
 		} catch (IllegalAccessException | InvocationTargetException e) {
 			e.printStackTrace();
 		}
-		return offset;
+		return INVALID_FIELD_OFFSET;
 	}
 
 	/**
@@ -169,7 +186,11 @@ public class InternalUnsafe {
 	}
 
 	public static void putObject(Object obj, String field, Object value) {
-		putObject(obj, Reflect.getField(obj, field), value);
+		Field f = Reflect.getField(obj, field);
+		if (Modifier.isStatic(f.getModifiers()))
+			unsafe.putObject(staticFieldBase(f), staticFieldOffset(f), value);
+		else
+			unsafe.putObject(obj, objectFieldOffset(obj.getClass(), field), value);
 	}
 
 	public static Object getObject(Object obj, Field field) {
@@ -180,7 +201,11 @@ public class InternalUnsafe {
 	}
 
 	public static Object getObject(Object obj, String field) {
-		return getObject(obj, Reflect.getField(obj, field));
+		Field f = Reflect.getField(obj, field);
+		if (Modifier.isStatic(f.getModifiers()))
+			return unsafe.getObject(staticFieldBase(f), staticFieldOffset(f));
+		else
+			return unsafe.getObject(obj, objectFieldOffset(obj.getClass(), field));
 	}
 
 	public static void putLong(Object obj, Field field, long value) {

@@ -3,9 +3,6 @@ package jvm.lang;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandles.Lookup;
-
-import jvm.klass.ObjectManipulator;
-
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
 
@@ -16,7 +13,13 @@ public class Handles {
 	private static final Lookup trusted_lookup;
 
 	static {
-		trusted_lookup = (Lookup) ObjectManipulator.access(Lookup.class, "IMPL_LOOKUP");// 获取拥有所有权限的受信任的Lookup的唯一方法
+		Lookup IMPL_LOOKUP = null;
+		try {
+			IMPL_LOOKUP = (Lookup) (InternalUnsafe.setAccessible(Lookup.class, "IMPL_LOOKUP", true).get(null));
+		} catch (IllegalArgumentException | IllegalAccessException e) {
+			e.printStackTrace();
+		} // 获取拥有所有权限的受信任的Lookup的唯一方法
+		trusted_lookup = IMPL_LOOKUP;
 	}
 
 	/**
