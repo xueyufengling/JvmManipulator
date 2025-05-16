@@ -32,6 +32,7 @@ public class KlassLoader {
 	public static class Proxy extends ClassLoader {
 		private ClassLoader son;
 		private HashMap<String, byte[]> klassDefs;
+		private boolean reverseLoading = false;// 记录是否已经开始向下查找，防止在整个加载链中都查找不到无限循环loadClass()
 
 		/**
 		 * Proxy将插入双亲委托加载链的dest的上方
@@ -53,8 +54,16 @@ public class KlassLoader {
 		@Override
 		protected Class<?> findClass(String name) throws ClassNotFoundException {
 			byte[] byte_code = klassDefs.get(name);
-			if (byte_code == null)
-				return son.loadClass(name);
+			// 代理及之上的类加载器找不到类定义时，则让子类加载器son去加载目标类，这样动态加载的类就可以引用son加载的类
+			if (byte_code == null) {
+				if (reverseLoading) {
+					reverseLoading = false;
+					throw new ClassNotFoundException("Class " + name + " not found in ClassLoader chain.");
+				} else {
+					reverseLoading = true;
+					return son.loadClass(name);
+				}
+			}
 			return defineClass(name, byte_code, 0, byte_code.length);
 		}
 
