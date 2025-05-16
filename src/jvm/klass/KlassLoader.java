@@ -30,6 +30,7 @@ public class KlassLoader {
 	}
 
 	public static class Proxy extends ClassLoader {
+		private ClassLoader son;
 		private HashMap<String, byte[]> klassDefs;
 
 		/**
@@ -41,6 +42,7 @@ public class KlassLoader {
 		public Proxy(ClassLoader dest, String dest_parent_field_name, HashMap<String, byte[]> undefinedKlass) {
 			super(KlassLoader.getClassLoaderParent(dest, dest_parent_field_name));
 			KlassLoader.setClassLoaderParent(dest, dest_parent_field_name, this);
+			this.son = dest;
 			this.klassDefs = undefinedKlass;
 		}
 
@@ -52,7 +54,7 @@ public class KlassLoader {
 		protected Class<?> findClass(String name) throws ClassNotFoundException {
 			byte[] byte_code = klassDefs.get(name);
 			if (byte_code == null)
-				throw new ClassNotFoundException(name);
+				return son.loadClass(name);
 			return defineClass(name, byte_code, 0, byte_code.length);
 		}
 
