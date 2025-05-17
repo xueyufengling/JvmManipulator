@@ -14,7 +14,7 @@ import com.sun.management.HotSpotDiagnosticMXBean;
 
 import jvm.klass.ObjectManipulator;
 import jvm.lang.Handles;
-import jvm.lang.Reflect;
+import jvm.lang.Reflection;
 
 /**
  * 管理JVM的相关功能
@@ -73,10 +73,10 @@ public abstract class VmManipulator {
 			ObjectManipulator.setObject(VmManipulator.class, "HotSpotDiagnosticMXBean", invokeManagementFactory("getPlatformMXBean", HotSpotDiagnosticMXBeanClass));
 			if (HotSpotDiagnosticMXBean != null) {
 				hotspot = true;// 获取HotSpotDiagnosticMXBean的getVMOption()方法
-				ObjectManipulator.setObject(VmManipulator.class, "HotSpotDiagnosticMXBean_getVMOption", ObjectManipulator.removeAccessCheck(Reflect.getMethod(HotSpotDiagnosticMXBeanClass, "getVMOption", String.class)));
+				ObjectManipulator.setObject(VmManipulator.class, "HotSpotDiagnosticMXBean_getVMOption", ObjectManipulator.removeAccessCheck(Reflection.getMethod(HotSpotDiagnosticMXBeanClass, "getVMOption", String.class)));
 				if (NATIVE_JVM_BIT_VERSION == 64) {// 64位JVM需要检查是否启用了指针压缩
 					Object oops_option = HotSpotDiagnosticMXBean_getVMOption.invoke(HotSpotDiagnosticMXBean, "UseCompressedOops");
-					ObjectManipulator.setObject(VmManipulator.class, "VMOption_getValue", Reflect.getMethod(oops_option, "getValue"));
+					ObjectManipulator.setObject(VmManipulator.class, "VMOption_getValue", Reflection.getMethod(oops_option, "getValue"));
 					compressed_oops = Boolean.parseBoolean(VMOption_getValue.invoke(oops_option).toString());
 				} else
 					compressed_oops = false;

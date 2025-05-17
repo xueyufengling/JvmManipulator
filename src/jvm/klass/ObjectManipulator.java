@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 
 import jvm.lang.Handles;
 import jvm.lang.InternalUnsafe;
-import jvm.lang.Reflect;
+import jvm.lang.Reflection;
 
 /**
  * 核心的类成员修改、访问和方法调用类，支持修改final、record成员变量。<br>
@@ -117,7 +117,7 @@ public abstract class ObjectManipulator {
 	 */
 	public static Object access(Object obj, String field_name) {
 		try {
-			Field field = ObjectManipulator.removeAccessCheck(Reflect.getField(obj, field_name));
+			Field field = ObjectManipulator.removeAccessCheck(Reflection.getField(obj, field_name));
 			return field.get(obj);
 		} catch (IllegalArgumentException | IllegalAccessException | SecurityException ex) {
 			System.err.println("access failed. obj=" + obj.toString() + ", field_name=" + field_name);
@@ -146,7 +146,7 @@ public abstract class ObjectManipulator {
 	 */
 	public static Object invoke(Object obj, String method_name, Class<?>[] arg_types, Object... args) {
 		try {
-			Method method = ObjectManipulator.removeAccessCheck(Reflect.getMethod(obj, method_name, arg_types));
+			Method method = ObjectManipulator.removeAccessCheck(Reflection.getMethod(obj, method_name, arg_types));
 			return method.invoke(obj, args);
 		} catch (IllegalArgumentException | IllegalAccessException | SecurityException ex) {
 			System.err.println("invoke failed. obj=" + obj.toString() + ", method_name=" + method_name);
@@ -187,7 +187,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setObject(Object obj, String field, Object value) {
-		return setObject(obj, Reflect.getField(obj, field), value);
+		return setObject(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static Object getObject(Object obj, Field field) {
@@ -197,7 +197,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static Object getObject(Object obj, String field) {
-		return getObject(obj, Reflect.getField(obj, field));
+		return getObject(obj, Reflection.getField(obj, field));
 	}
 
 	public static boolean setLong(Object obj, Field field, long value) {
@@ -208,7 +208,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setLong(Object obj, String field, long value) {
-		return setLong(obj, Reflect.getField(obj, field), value);
+		return setLong(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static boolean setBoolean(Object obj, Field field, boolean value) {
@@ -219,7 +219,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setBoolean(Object obj, String field, boolean value) {
-		return setBoolean(obj, Reflect.getField(obj, field), value);
+		return setBoolean(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static boolean setInt(Object obj, Field field, int value) {
@@ -230,7 +230,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setInt(Object obj, String field, int value) {
-		return setInt(obj, Reflect.getField(obj, field), value);
+		return setInt(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static boolean setDouble(Object obj, Field field, double value) {
@@ -241,7 +241,7 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setDouble(Object obj, String field, double value) {
-		return setDouble(obj, Reflect.getField(obj, field), value);
+		return setDouble(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static boolean setFloat(Object obj, Field field, float value) {
@@ -252,6 +252,6 @@ public abstract class ObjectManipulator {
 	}
 
 	public static boolean setFloat(Object obj, String field, float value) {
-		return setFloat(obj, Reflect.getField(obj, field), value);
+		return setFloat(obj, Reflection.getField(obj, field), value);
 	}
 }

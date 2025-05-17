@@ -9,7 +9,7 @@ import java.util.ArrayList;
 /**
  * 反射工具，大部分功能可以直接使用Manipulator调用
  */
-public abstract class Reflect {
+public abstract class Reflection {
 
 	public static Class<?> getClassForName(String name, boolean printClassNotFoundException) {
 		try {

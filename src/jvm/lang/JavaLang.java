@@ -67,7 +67,7 @@ public class JavaLang {
 		Field f = null;
 		Map<Class<?>, Set<String>> filterMap = getReflectionFieldFilter();
 		removeReflectionFieldFilter();
-		f = Reflect.getField(cls, field_name);
+		f = Reflection.getField(cls, field_name);
 		setReflectionFieldFilter(filterMap);
 		return f;
 	}

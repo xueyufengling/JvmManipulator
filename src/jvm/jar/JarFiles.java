@@ -16,7 +16,7 @@ import java.util.jar.JarInputStream;
 import jvm.klass.KlassLoader;
 import jvm.klass.UriPath;
 import jvm.lang.JavaLang;
-import jvm.lang.Reflect;
+import jvm.lang.Reflection;
 
 /**
  * jar文件的相关操作，任何操作都需要传入{@code any_class_in_jar}，即jar内的任意一个类。<br>
@@ -518,7 +518,7 @@ public class JarFiles {
 		List<Class<?>> specified_class_list = new ArrayList<>();
 		List<Class<?>> class_list = getClassInJarPackage(any_class_in_package, package_name, include_subpackage);
 		for (Class<?> clazz : class_list)
-			if (Reflect.hasSuperClass(clazz, super_class))
+			if (Reflection.hasSuperClass(clazz, super_class))
 				specified_class_list.add(clazz);
 		return specified_class_list;
 	}

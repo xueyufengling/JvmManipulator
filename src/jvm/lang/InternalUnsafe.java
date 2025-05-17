@@ -107,7 +107,7 @@ public class InternalUnsafe {
 	}
 
 	public static Field setAccessible(Class<?> cls, String field_name, boolean accessible) {
-		Field f = Reflect.getField(cls, field_name);
+		Field f = Reflection.getField(cls, field_name);
 		setAccessible(f, accessible);
 		return f;
 	}
@@ -186,7 +186,7 @@ public class InternalUnsafe {
 	}
 
 	public static void putObject(Object obj, String field, Object value) {
-		Field f = Reflect.getField(obj, field);
+		Field f = Reflection.getField(obj, field);
 		if (Modifier.isStatic(f.getModifiers()))
 			unsafe.putObject(staticFieldBase(f), staticFieldOffset(f), value);
 		else
@@ -201,7 +201,7 @@ public class InternalUnsafe {
 	}
 
 	public static Object getObject(Object obj, String field) {
-		Field f = Reflect.getField(obj, field);
+		Field f = Reflection.getField(obj, field);
 		if (Modifier.isStatic(f.getModifiers()))
 			return unsafe.getObject(staticFieldBase(f), staticFieldOffset(f));
 		else
@@ -216,7 +216,7 @@ public class InternalUnsafe {
 	}
 
 	public static void putLong(Object obj, String field, long value) {
-		putLong(obj, Reflect.getField(obj, field), value);
+		putLong(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static void puttBoolean(Object obj, Field field, boolean value) {
@@ -227,7 +227,7 @@ public class InternalUnsafe {
 	}
 
 	public static void puttBoolean(Object obj, String field, boolean value) {
-		puttBoolean(obj, Reflect.getField(obj, field), value);
+		puttBoolean(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static void putInt(Object obj, Field field, int value) {
@@ -238,7 +238,7 @@ public class InternalUnsafe {
 	}
 
 	public static void putInt(Object obj, String field, int value) {
-		putInt(obj, Reflect.getField(obj, field), value);
+		putInt(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static void putDouble(Object obj, Field field, double value) {
@@ -249,7 +249,7 @@ public class InternalUnsafe {
 	}
 
 	public static void putDouble(Object obj, String field, double value) {
-		putDouble(obj, Reflect.getField(obj, field), value);
+		putDouble(obj, Reflection.getField(obj, field), value);
 	}
 
 	public static void putFloat(Object obj, Field field, float value) {

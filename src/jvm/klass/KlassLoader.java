@@ -11,7 +11,7 @@ import java.security.ProtectionDomain;
 import java.util.HashMap;
 
 import jvm.lang.JavaLang;
-import jvm.lang.Reflect;
+import jvm.lang.Reflection;
 
 public class KlassLoader {
 	public static final String ClassExtensionName = ".class";
@@ -24,10 +24,10 @@ public class KlassLoader {
 
 	static {
 		JavaLang.noReflectionFieldFilter(() -> {
-			ClassLoader_m_defineClass = Reflect.getMethod(ClassLoader.class, "defineClass", new Class<?>[] { String.class, byte[].class, int.class, int.class, ProtectionDomain.class });
-			ClassLoader_m_findClass = Reflect.getMethod(ClassLoader.class, "findClass", new Class<?>[] { String.class });
-			ClassLoader_f_parent = Reflect.getField(ClassLoader.class, "parent");
-			Class_f_classLoader = Reflect.getField(Class.class, "classLoader");
+			ClassLoader_m_defineClass = Reflection.getMethod(ClassLoader.class, "defineClass", new Class<?>[] { String.class, byte[].class, int.class, int.class, ProtectionDomain.class });
+			ClassLoader_m_findClass = Reflection.getMethod(ClassLoader.class, "findClass", new Class<?>[] { String.class });
+			ClassLoader_f_parent = Reflection.getField(ClassLoader.class, "parent");
+			Class_f_classLoader = Reflection.getField(Class.class, "classLoader");
 		});
 	}
 
