@@ -314,21 +314,23 @@ public class JarFiles {
 		});
 	}
 
-	public static HashMap<String, byte[]> collectClass(InputStream jar) {
+	public static HashMap<String, byte[]> collectClass(InputStream... jars) {
 		HashMap<String, byte[]> classDefs = new HashMap<>();
-		filterClass(jar, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
-			classDefs.put(class_full_name, bytes.toByteArray());
-			return true;
-		});
+		for (InputStream jar : jars)
+			filterClass(jar, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+				classDefs.put(class_full_name, bytes.toByteArray());
+				return true;
+			});
 		return classDefs;
 	}
 
-	public static HashMap<String, byte[]> collectClass(InputStream jar, String start_path, boolean include_subpackage) {
+	public static HashMap<String, byte[]> collectClass(String start_path, boolean include_subpackage, InputStream... jars) {
 		HashMap<String, byte[]> classDefs = new HashMap<>();
-		filterClass(jar, start_path, include_subpackage, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
-			classDefs.put(class_full_name, bytes.toByteArray());
-			return true;
-		});
+		for (InputStream jar : jars)
+			filterClass(jar, start_path, include_subpackage, (String class_full_name, JarEntry entry, ByteArrayOutputStream bytes) -> {
+				classDefs.put(class_full_name, bytes.toByteArray());
+				return true;
+			});
 		return classDefs;
 	}
 
@@ -404,24 +406,39 @@ public class JarFiles {
 
 	// --------------------------------------------------------- File System --------------------------------------------------------------------
 
+	/**
+	 * 获取any_class_in_jar所在jar的路径
+	 * 
+	 * @param any_class_in_jar
+	 * @param resolver         路径解析器，根据URI分割为合法的文件系统路径和Entry路径
+	 * @return
+	 */
 	public static String getJarFilePath(Class<?> any_class_in_jar, UriPath.Resolver resolver) {
 		return KlassLoader.localKlassLocation(any_class_in_jar, resolver);
 	}
 
 	public static String getJarFilePath(UriPath.Resolver resolver) {
-		Class<?> caller = JavaLang.getOuterCallerClass();
-		return getJarFilePath(caller, resolver);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();// 获取调用该方法的类
+		return getJarFilePath(caller, resolver);
 	}
 
 	public static String getJarFilePath() {
-		Class<?> caller = JavaLang.getOuterCallerClass();
-		return getJarFilePath(caller, UriPath.Resolver.DEFAULT);// 获取调用该方法的类
+		Class<?> caller = JavaLang.getOuterCallerClass();// 获取调用该方法的类
+		return getJarFilePath(caller, UriPath.Resolver.DEFAULT);
 	}
 
 	public static boolean isRootDir(String dir) {
 		return dir == null || dir.equals("") || dir.equals("/");
 	}
 
+	/**
+	 * 获取any_class_in_jar所在jar文件字节流
+	 * 
+	 * @param any_class_in_jar
+	 * @param resolver         路径解析器，根据URI分割为合法的文件系统路径和Entry路径
+	 * @return
+	 * @throws FileNotFoundException
+	 */
 	public static InputStream getJarInputStream(Class<?> any_class_in_jar, UriPath.Resolver resolver) throws FileNotFoundException {
 		return new FileInputStream(getJarFilePath(any_class_in_jar, resolver));
 	}
@@ -432,6 +449,46 @@ public class JarFiles {
 
 	public static InputStream getJarInputStream(byte[] bytes) {
 		return new ByteArrayInputStream(bytes);
+	}
+
+	/**
+	 * 获取多个any_class_in_jars类所在jar文件字节流
+	 * 
+	 * @param any_class_in_jars
+	 * @param resolver          路径解析器，根据URI分割为合法的文件系统路径和Entry路径
+	 * @return
+	 * @throws FileNotFoundException
+	 */
+	public static InputStream[] getJarsInputStreams(UriPath.Resolver resolver, Class<?>... any_class_in_jars) throws FileNotFoundException {
+		InputStream[] streams = new InputStream[any_class_in_jars.length];
+		for (int idx = 0; idx < any_class_in_jars.length; ++idx) {
+			streams[idx] = new FileInputStream(getJarFilePath(any_class_in_jars[idx], resolver));
+		}
+		return streams;
+	}
+
+	public static InputStream[] getJarsInputStreams(Class<?>... any_class_in_jars) throws FileNotFoundException {
+		InputStream[] streams = new InputStream[any_class_in_jars.length];
+		for (int idx = 0; idx < any_class_in_jars.length; ++idx) {
+			streams[idx] = getJarInputStream(any_class_in_jars[idx], UriPath.Resolver.DEFAULT);
+		}
+		return streams;
+	}
+
+	public static InputStream[] getJarsInputStreams(byte[]... multi_bytes) {
+		InputStream[] streams = new InputStream[multi_bytes.length];
+		for (int idx = 0; idx < multi_bytes.length; ++idx) {
+			streams[idx] = new ByteArrayInputStream(multi_bytes[idx]);
+		}
+		return streams;
+	}
+
+	public static InputStream[] getJarsInputStreams(Class<?> any_class_in_jar, String... entry_paths) {
+		InputStream[] streams = new InputStream[entry_paths.length];
+		for (int idx = 0; idx < entry_paths.length; ++idx) {
+			streams[idx] = getJarInputStream(getResourceAsBytes(any_class_in_jar, entry_paths[idx]));
+		}
+		return streams;
 	}
 
 	// ----------------------------------------------------------- Class ---------------------------------------------------------------------------

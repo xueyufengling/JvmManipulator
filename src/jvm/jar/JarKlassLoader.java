@@ -14,12 +14,12 @@ public class JarKlassLoader {
 	 * @param loader
 	 * @param jar
 	 */
-	public static ClassLoader loadKlass(ClassLoader loader, InputStream jar) {
-		return KlassLoader.Proxy.addFor(loader, parentClassLoaderField, JarFiles.collectClass(jar));
+	public static ClassLoader loadKlass(ClassLoader loader, InputStream... jars) {
+		return KlassLoader.Proxy.addFor(loader, parentClassLoaderField, JarFiles.collectClass(jars));
 	}
 
-	public static ClassLoader loadKlass(ClassLoader loader, byte[] jar_bytes) {
-		return loadKlass(loader, JarFiles.getJarInputStream(jar_bytes));
+	public static ClassLoader loadKlass(ClassLoader loader, byte[]... multi_jar_bytes) {
+		return loadKlass(loader, JarFiles.getJarsInputStreams(multi_jar_bytes));
 	}
 
 	public static final void resetParentClassLoaderField() {
@@ -34,12 +34,12 @@ public class JarKlassLoader {
 	 * @param package_name
 	 * @param include_subpackage
 	 */
-	public static ClassLoader loadKlass(ClassLoader loader, InputStream jar, String package_name, boolean include_subpackage) {
-		return KlassLoader.Proxy.addFor(loader, parentClassLoaderField, JarFiles.collectClass(jar, package_name, include_subpackage));
+	public static ClassLoader loadKlass(ClassLoader loader, String package_name, boolean include_subpackage, InputStream... jars) {
+		return KlassLoader.Proxy.addFor(loader, parentClassLoaderField, JarFiles.collectClass(package_name, include_subpackage, jars));
 	}
 
-	public static ClassLoader loadKlass(ClassLoader loader, byte[] jar_bytes, String package_name, boolean include_subpackage) {
-		return loadKlass(loader, JarFiles.getJarInputStream(jar_bytes));
+	public static ClassLoader loadKlass(ClassLoader loader, String package_name, boolean include_subpackage, byte[]... multi_jar_bytes) {
+		return loadKlass(loader, JarFiles.getJarsInputStreams(multi_jar_bytes));
 	}
 
 	/**
@@ -47,20 +47,19 @@ public class JarKlassLoader {
 	 * 
 	 * @param jar
 	 */
-	public static ClassLoader loadKlass(InputStream jar) {
+	public static ClassLoader loadKlass(InputStream... jars) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		return loadKlass(caller.getClassLoader(), jar);
+		return loadKlass(caller.getClassLoader(), jars);
 	}
 
-	public static ClassLoader loadKlass(byte[] jar_bytes) {
+	public static ClassLoader loadKlass(byte[]... multi_jar_bytes) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		return loadKlass(caller.getClassLoader(), JarFiles.getJarInputStream(jar_bytes));
+		return loadKlass(caller.getClassLoader(), JarFiles.getJarsInputStreams(multi_jar_bytes));
 	}
 
-	public static ClassLoader loadKlass(String jar_path) {
+	public static ClassLoader loadKlass(String... jar_paths) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		byte[] jar_bytes = JarFiles.getResourceAsBytes(caller, jar_path);
-		return loadKlass(caller.getClassLoader(), JarFiles.getJarInputStream(jar_bytes));
+		return loadKlass(caller.getClassLoader(), JarFiles.getJarsInputStreams(caller, jar_paths));
 	}
 
 	/**
@@ -70,19 +69,18 @@ public class JarKlassLoader {
 	 * @param package_name
 	 * @param include_subpackage
 	 */
-	public static ClassLoader loadKlass(InputStream jar, String package_name, boolean include_subpackage) {
+	public static ClassLoader loadKlass(String package_name, boolean include_subpackage, InputStream... jars) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		return loadKlass(caller.getClassLoader(), jar, package_name, include_subpackage);
+		return loadKlass(caller.getClassLoader(), package_name, include_subpackage, jars);
 	}
 
-	public static ClassLoader loadKlass(byte[] jar_bytes, String package_name, boolean include_subpackage) {
+	public static ClassLoader loadKlass(String package_name, boolean include_subpackage, byte[]... multi_jar_bytes) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		return loadKlass(caller.getClassLoader(), JarFiles.getJarInputStream(jar_bytes), package_name, include_subpackage);
+		return loadKlass(caller.getClassLoader(), package_name, include_subpackage, JarFiles.getJarsInputStreams(multi_jar_bytes));
 	}
 
-	public static ClassLoader loadKlass(String jar_path, String package_name, boolean include_subpackage) {
+	public static ClassLoader loadKlass(String package_name, boolean include_subpackage, String... entry_jar_paths) {
 		Class<?> caller = JavaLang.getOuterCallerClass();
-		byte[] jar_bytes = JarFiles.getResourceAsBytes(caller, jar_path);
-		return loadKlass(caller.getClassLoader(), JarFiles.getJarInputStream(jar_bytes), package_name, include_subpackage);
+		return loadKlass(caller.getClassLoader(), package_name, include_subpackage, JarFiles.getJarsInputStreams(caller, entry_jar_paths));
 	}
 }
